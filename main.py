@@ -1,5 +1,6 @@
 import sqlite3
 import ipaddress
+import threading
 
 from fastapi import FastAPI
 from datetime import datetime, timezone
@@ -8,13 +9,28 @@ from database import init_database
 from pydantic import BaseModel
 from fastapi import HTTPException
 from database import get_connection
+from contextlib import asynccontextmanager
+from monitor import start_monitoring
+
+@asynccontextmanager
+async def lifespan(app):
+    init_database()
+
+    stop_event = threading.Event()
+    monitor_thread = start_monitoring(stop_event)
+
+    yield
+
+    stop_event.set()
+    monitor_thread.join(timeout=5)
 
 app = FastAPI(
     title="RouteVexa",
     description="Open-source network monitoring and management platform",
-    version="0.3.0",
+    version="0.4.0",
+    lifespan=lifespan
 )
-init_database()  # Initialize the database when the application starts
+
 class DeviceCreate(BaseModel):
     name: str
     ip: str
@@ -25,7 +41,7 @@ def home():
     return {
         "application": "RouteVexa",
         "status": "running",
-        "version": "0.3.0",
+        "version": "0.4.0",
     }
 
 

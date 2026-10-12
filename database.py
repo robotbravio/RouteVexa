@@ -11,11 +11,28 @@ def get_connection():
 
 def init_database():
     with get_connection() as connection:
-        connection.execute("""
+        connection.execute(
+            """
             CREATE TABLE IF NOT EXISTS devices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 ip TEXT NOT NULL UNIQUE,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+            """
+        )
+
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(devices)")
+        }
+
+        if "status" not in columns:
+            connection.execute(
+                "ALTER TABLE devices ADD COLUMN status TEXT DEFAULT 'unknown'"
+            )
+
+        if "last_checked" not in columns:
+            connection.execute(
+                "ALTER TABLE devices ADD COLUMN last_checked TEXT DEFAULT 'unknown'"
+            )
