@@ -14,10 +14,16 @@ def monitor_devices():
 
     for device in devices:
         result = ping_device(device["ip"])
+
         with get_connection() as connection:
             connection.execute(
                 "UPDATE devices SET status = ?, last_checked = CURRENT_TIMESTAMP WHERE id = ?",
                 (result["status"], device["id"])
+            )
+
+            connection.execute(
+                "INSERT INTO monitoring_history (device_id, status, latency_ms) VALUES (?, ?, ?)",
+                (device["id"], result["status"], result.get("latency_ms", 0))
             )
 
         print(

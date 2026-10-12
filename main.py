@@ -115,3 +115,21 @@ def delete_device(device_id: int):
 
     return {"message": "Device deleted successfully", "id": device_id}
 
+@app.get("/devices/{device_id}/history")
+def get_device_history(device_id: int):
+    with get_connection() as connection:
+        history = connection.execute(
+            """
+            SELECT id, device_id, status, latency_ms, checked_at
+            FROM monitoring_history
+            WHERE device_id = ?
+            ORDER BY checked_at DESC, id DESC
+            """,
+            (device_id,)
+        ).fetchall()
+
+    return {
+        "device_id": device_id,
+        "total": len(history),
+        "history": [dict(record) for record in history]
+    }

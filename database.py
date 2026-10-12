@@ -36,3 +36,16 @@ def init_database():
             connection.execute(
                 "ALTER TABLE devices ADD COLUMN last_checked TEXT DEFAULT 'unknown'"
             )
+
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS monitoring_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                latency_ms REAL,
+                checked_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (device_id)
+                    REFERENCES devices(id)
+                    ON DELETE CASCADE
+            )
+        """)
