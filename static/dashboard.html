@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RouteVexa Dashboard</title>
+    <style>
+        body {
+        background-color: #0f172a;
+        color: #f8fafc;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 30px;
+        }
+
+        h1 {
+        color: #38bdf8;
+        margin-bottom: 5px;
+        }
+
+        .subtitle {
+        color: #94a3b8;
+    }
+
+    .panel {
+        background-color: #1e293b;
+        border-radius: 12px;
+        padding: 25px;
+        margin-top: 30px;
+    }
+
+    .panel h2 {
+        margin-top: 0;
+    }
+
+    .online {
+        color: #4ade80;
+    }
+
+    .offline {
+        color: #f87171;
+    }
+
+    #device-list li {
+        padding: 10px;
+        margin-bottom: 8px;
+    }
+
+    .device-card {
+        background-color: #29364d;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-left: 4px solid #38bdf8;
+    }
+
+    .device-card h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+    }
+
+    .device-card p {
+        margin: 6px 0;
+        color: #cbd5e1
+    }
+
+    .device-card.online {
+        border-left-color: #4ade80
+    }
+
+    .device-card.offline {
+        border-left-color: #f87171;
+    }
+    
+    </style>
+
+</head>
+<body>
+    <h1>RouteVexa</h1>
+    <p class="subtitle">Network Monitoring Dashboard</p>
+
+    <div class ="panel">
+        <h2>Network Devices</h2>
+        <div id="device-list">Loading devices...</div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        const charts = {};
+
+        async function loadLatencyChart(deviceId) {
+            const response = await fetch(`/devices/${deviceId}/history`);
+
+            if (!response.ok) {
+                throw new Error('Failed to load monitoring history');
+            }
+
+            const data = await response.json();
+            const history = data.history.slice().reverse();
+
+            const labels = history.map(entry => entry.checked_at.slice(11, 19));
+            const latencies = history.map(entry => entry.latency_ms);
+
+            const canvas = document.getElementById(`latency-chart-${deviceId}`);
+
+            if (!canvas) return;
+
+            charts[deviceId] = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Latency (ms)',
+                        data: latencies,
+                        borderColor: '#38bdf8',
+                        tension: 0.3,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        x: {
+                            ticks: {
+                                maxTicksLimit: 6,
+                                maxRotation: 0
+                            }
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadDevices() {
+            const container = document.getElementById('device-list');
+
+            try {
+                const response = await fetch('/devices');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                const devices = data.devices;
+
+                if (devices.length === 0) {
+                    container.innerHTML = '<p>No devices found.</p>';
+                    return;
+                }
+
+                const list = document.createElement('div');
+
+                devices.forEach(device => {
+                    const card = document.createElement('div');
+
+                    card.className = device.status === 'reachable'
+                        ? 'device-card online'
+                        : 'device-card offline';
+
+                    const title = document.createElement('h3');
+                    title.textContent = device.name;
+
+                    const ip = document.createElement('p');
+                    ip.textContent = `IP Address: ${device.ip}`;
+
+                    const status = document.createElement('p');
+                    status.textContent = `Status: ${device.status}`;
+
+                    const latency = document.createElement('p');
+                    latency.textContent = `Latency: ${device.latency_ms ?? 'N/A'} ms`;
+
+                    const checked = document.createElement('p');
+                    checked.textContent = `Last Checked: ${device.last_checked}`;
+
+                    card.appendChild(title);
+                    card.appendChild(ip);
+                    card.appendChild(status);
+                    card.appendChild(latency);
+                    card.appendChild(checked);
+
+                    const graph = document.createElement('canvas');
+                    graph.id = `latency-chart-${device.id}`;
+                    graph.style.width = '100%';
+                    graph.style.maxHeight = '200px';
+
+                    card.appendChild(graph);
+                    list.appendChild(card);
+
+                });
+
+                Object.values(charts).forEach(chart => chart.destroy());
+
+                for (const key of Object.keys(charts)) {
+                    delete charts[key];
+                }
+
+                container.replaceChildren(list);
+
+                for (const device of devices) {
+                    try {
+                        await loadLatencyChart(device.id);
+                    } catch (error) {
+                        console.error(`Chart error for device ${device.id}:`, error);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching devices:', error);
+                container.innerHTML = '<p>Error loading devices. Please try again later.</p>';
+            }
+        }
+
+        loadDevices();
+        setInterval(loadDevices, 30000);
+    </script>
+</body>
+</html>

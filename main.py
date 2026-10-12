@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from database import get_connection
 from contextlib import asynccontextmanager
 from monitor import start_monitoring
+from fastapi.responses import FileResponse
 
 @asynccontextmanager
 async def lifespan(app):
@@ -30,6 +31,10 @@ app = FastAPI(
     version="0.4.0",
     lifespan=lifespan
 )
+
+@app.get("/dashboard", include_in_schema=False)
+def dashboard():
+    return FileResponse("static/dashboard.html")
 
 class DeviceCreate(BaseModel):
     name: str
@@ -80,20 +85,37 @@ def create_device(device: DeviceCreate):
 def list_devices():
     with get_connection() as connection:
         cursor = connection.execute(
-            "SELECT id, name, ip, created_at FROM devices ORDER BY id"
+            """
+            SELECT
+                d.id,
+                d.name,
+                d.ip,
+                d.created_at,
+                d.status,
+                d.last_checked,
+                (
+                    SELECT mh.latency_ms
+                    FROM monitoring_history mh
+                    WHERE mh.device_id = d.id
+                    ORDER BY mh.id DESC
+                    LIMIT 1
+                ) AS latency_ms
+            FROM devices d
+            ORDER BY d.id
+            """
         )
         devices = cursor.fetchall()
 
-        return {
-            "total": len(devices),
-            "devices": [dict(device) for device in devices]
-        }
+    return {
+        "total": len(devices),
+        "devices": [dict(device) for device in devices],
+    }
 
 @app.get("/devices/{device_id}")
 def get_device(device_id: int):
     with get_connection() as connection:
         cursor = connection.execute(
-            "SELECT id, name, ip, created_at FROM devices WHERE id = ?",
+            "SELECT id, name, ip, created_at, status, last_checked FROM devices WHERE id = ?",
             (device_id,)
         )
         device = cursor.fetchone()
